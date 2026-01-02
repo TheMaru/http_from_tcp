@@ -43,6 +43,7 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 			n, err := f.Read(buffer)
 			if err != nil {
 				if err == io.EOF {
+					fmt.Printf("rest of line: %s\n", line)
 					return
 				}
 				fmt.Printf("read error: %v\n", err)
