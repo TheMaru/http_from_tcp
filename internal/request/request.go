@@ -29,7 +29,7 @@ var upperASCII = regexp.MustCompile(`^[A-Z]+$`)
 var bufferSize = 8
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
-	buf := make([]byte, bufferSize, bufferSize)
+	buf := make([]byte, bufferSize)
 	readToIndex := 0
 	request := &Request{
 		State: RequestStateInitialized,

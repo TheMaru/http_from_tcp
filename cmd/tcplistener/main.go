@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net"
-	"strings"
+
+	"github.com/TheMaru/http_from_tcp/internal/request"
 )
 
 func main() {
@@ -20,45 +20,23 @@ func main() {
 		if err != nil {
 			log.Fatal("Can't accept connection", err)
 		}
-		fmt.Println("connection has been accepted")
+		fmt.Println("Connection has been accepted")
 
-		ch := getLinesChannel(conn)
-
-		for line := range ch {
-			fmt.Println(line)
+		request, err := request.RequestFromReader(conn)
+		if err != nil {
+			fmt.Println("Error while reading data", err)
 		}
-		fmt.Println("connection is closed again")
+
+		fmt.Println("Request line:")
+		fmt.Printf("- Method: %s\n", request.RequestLine.Method)
+		fmt.Printf("- Target: %s\n", request.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %s\n", request.RequestLine.HttpVersion)
+
+		// ch := getLinesChannel(conn)
+		//
+		// for line := range ch {
+		// 	fmt.Println(line)
+		// }
+		fmt.Println("Connection is closed again")
 	}
-}
-
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	ch := make(chan string)
-
-	go func() {
-		defer f.Close()
-		defer close(ch)
-		buffer := make([]byte, 8)
-		line := ""
-		for {
-			n, err := f.Read(buffer)
-			if err != nil {
-				if err == io.EOF {
-					fmt.Printf("rest of line: %s\n", line)
-					return
-				}
-				fmt.Printf("read error: %v\n", err)
-				return
-			}
-			if n > 0 {
-				parts := strings.Split(string(buffer[:n]), "\n")
-				for i := 0; i < len(parts)-1; i++ {
-					ch <- line + parts[i]
-					line = ""
-				}
-				line += parts[len(parts)-1]
-			}
-		}
-	}()
-
-	return ch
 }
