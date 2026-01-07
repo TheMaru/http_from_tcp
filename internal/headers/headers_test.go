@@ -46,6 +46,17 @@ func TestHeaders(t *testing.T) {
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
 
+	// Test: Add value to map for same key header
+	headers = NewHeaders()
+	headers["set-person"] = "foo-bar"
+	data = []byte("Set-Person: blah-fasel\r\n\r\n")
+	n, done, err = headers.Parse(data)
+	require.NoError(t, err)
+	require.NotNil(t, headers)
+	assert.Equal(t, "foo-bar, blah-fasel", headers["set-person"])
+	assert.Equal(t, 24, n)
+	assert.False(t, done)
+
 	// Test: Valid 2 headers with existing headers
 	headers = NewHeaders()
 	headers["Foo"] = "Bar"

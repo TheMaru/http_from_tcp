@@ -52,7 +52,13 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
 	startValue := colonIndex + 1
 	value := strings.Trim(header[startValue:], " ")
-	h[strings.ToLower(key)] = value
+	lowercaseKey := strings.ToLower(key)
+	existingValue, exists := h[lowercaseKey]
+	if exists {
+		h[lowercaseKey] = strings.Join([]string{existingValue, value}, ", ")
+	} else {
+		h[lowercaseKey] = value
+	}
 
 	n = len(dataString[:i]) + 2
 	return
