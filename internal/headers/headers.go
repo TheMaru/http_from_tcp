@@ -2,6 +2,7 @@ package headers
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -13,6 +14,7 @@ func NewHeaders() Headers {
 }
 
 var ErrInvalidHeader = errors.New("Header formatting error")
+var headerKeyRE = regexp.MustCompile(`^[A-Za-z0-9!#$%&'\*\+\-\.\^_` + "`" + `\|~]+$`)
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	dataString := string(data)
@@ -41,10 +43,16 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		err = ErrInvalidHeader
 		return
 	}
+	isValidKey := headerKeyRE.MatchString(key)
+	if !isValidKey {
+		n = 0
+		err = errors.New("invalid characters in header key")
+		return
+	}
 
 	startValue := colonIndex + 1
 	value := strings.Trim(header[startValue:], " ")
-	h[key] = value
+	h[strings.ToLower(key)] = value
 
 	n = len(dataString[:i]) + 2
 	return
