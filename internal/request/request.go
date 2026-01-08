@@ -2,21 +2,26 @@ package request
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"regexp"
 	"strings"
+
+	"github.com/TheMaru/http_from_tcp/internal/headers"
 )
 
 type RequestStatus = int
 
 const (
-	RequestStateInitialized RequestStatus = iota
-	RequestStateDone
+	requestStateInitialized RequestStatus = iota
+	requestStateParsingHeaders
+	requestStateDone
 )
 
 type Request struct {
 	RequestLine RequestLine
-	State       RequestStatus
+	Headers     headers.Headers
+	state       RequestStatus
 }
 
 type RequestLine struct {
@@ -32,10 +37,11 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	buf := make([]byte, bufferSize)
 	readToIndex := 0
 	request := &Request{
-		State: RequestStateInitialized,
+		Headers: headers.NewHeaders(),
+		state:   requestStateInitialized,
 	}
 
-	for request.State != RequestStateDone {
+	for request.state != requestStateDone {
 		if readToIndex >= len(buf) {
 			newBuf := make([]byte, len(buf)*2)
 			copy(newBuf, buf)
@@ -45,7 +51,9 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		numBytesRead, err := reader.Read(buf[readToIndex:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				request.State = RequestStateDone
+				if request.state != requestStateDone {
+					return nil, fmt.Errorf("incomplete request, in state: %d, read n bytes on EOF: %d", request.state, numBytesRead)
+				}
 				break
 			}
 			return nil, err
@@ -101,8 +109,24 @@ func parseRequestLine(req string) (int, *RequestLine, error) {
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	switch r.State {
-	case RequestStateInitialized:
+	totalBytesParsed := 0
+	for r.state != requestStateDone {
+		n, err := r.parseSingle(data[totalBytesParsed:])
+		if err != nil {
+			return 0, err
+		}
+		totalBytesParsed += n
+		if n == 0 {
+			break
+		}
+	}
+
+	return totalBytesParsed, nil
+}
+
+func (r *Request) parseSingle(data []byte) (int, error) {
+	switch r.state {
+	case requestStateInitialized:
 		n, requestLine, err := parseRequestLine(string(data))
 		if err != nil {
 			return 0, err
@@ -112,13 +136,23 @@ func (r *Request) parse(data []byte) (int, error) {
 		}
 
 		r.RequestLine = *requestLine
-		r.State = RequestStateDone
+		r.state = requestStateParsingHeaders
 		return n, nil
-	case RequestStateDone:
-
+	case requestStateParsingHeaders:
+		n, noMoreHeaders, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+		if n == 0 {
+			return 0, nil
+		}
+		if noMoreHeaders {
+			r.state = requestStateDone
+		}
+		return n, nil
+	case requestStateDone:
 		return 0, errors.New("Error: trying to read data in a done state")
 	default:
 		return 0, errors.New("Error: unknown state")
 	}
-
 }
