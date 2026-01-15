@@ -16,6 +16,13 @@ func NewHeaders() Headers {
 var ErrInvalidHeader = errors.New("Header formatting error")
 var headerKeyRE = regexp.MustCompile(`^[A-Za-z0-9!#$%&'\*\+\-\.\^_` + "`" + `\|~]+$`)
 
+func (h Headers) Get(key string) (string, bool) {
+	lowercaseKey := strings.ToLower(key)
+	value, exists := h[lowercaseKey]
+
+	return value, exists
+}
+
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	dataString := string(data)
 	done = false

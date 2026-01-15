@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/TheMaru/http_from_tcp/internal/headers"
@@ -15,12 +16,14 @@ type RequestStatus = int
 const (
 	requestStateInitialized RequestStatus = iota
 	requestStateParsingHeaders
+	requestStateParsingBody
 	requestStateDone
 )
 
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body        []byte
 	state       RequestStatus
 }
 
@@ -147,9 +150,30 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 			return 0, nil
 		}
 		if noMoreHeaders {
-			r.state = requestStateDone
+			r.state = requestStateParsingBody
 		}
 		return n, nil
+	case requestStateParsingBody:
+		expectedContentLength, exists := r.Headers.Get("Content-Length")
+		if !exists {
+			r.state = requestStateDone
+			return 0, nil
+		}
+
+		expectedContentLengthInt, err := strconv.Atoi(expectedContentLength)
+		if err != nil {
+			return 0, err
+		}
+
+		r.Body = append(r.Body, data...)
+
+		if len(r.Body) > expectedContentLengthInt {
+			return len(data), fmt.Errorf("Body exceeds expected length: expected %d, got %d", expectedContentLengthInt, len(r.Body))
+		}
+		if len(r.Body) == expectedContentLengthInt {
+			r.state = requestStateDone
+		}
+		return len(data), nil
 	case requestStateDone:
 		return 0, errors.New("Error: trying to read data in a done state")
 	default:
