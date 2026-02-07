@@ -1,20 +1,26 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"sync/atomic"
 
+	"github.com/TheMaru/http_from_tcp/internal/request"
 	"github.com/TheMaru/http_from_tcp/internal/response"
 )
 
 type Server struct {
 	Listener     net.Listener
 	ServerClosed atomic.Bool
+	handler      Handler
 }
 
-func Serve(port int) (*Server, error) {
+type Handler func(w io.Writer, req *request.Request) *HandlerError
+
+func Serve(port int, handler Handler) (*Server, error) {
 	portString := strconv.Itoa(port)
 	listener, err := net.Listen("tcp", ":"+portString)
 	if err != nil {
@@ -23,6 +29,7 @@ func Serve(port int) (*Server, error) {
 
 	server := Server{
 		Listener: listener,
+		handler:  handler,
 	}
 	server.ServerClosed.Store(false)
 
@@ -57,15 +64,27 @@ func (s *Server) listen() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-	err := response.WriteStatusLine(conn, 200)
+	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		fmt.Printf("Error during writing of response status line: %v\n", err)
+		hErr := HandlerError{
+			StatusCode: response.StatusBadRequest,
+			Message:    err.Error(),
+		}
+		hErr.Write(conn)
+		return
 	}
-	headers := response.GetDefaultHeaders(0)
-	err = response.WriteHeaders(conn, headers)
-	if err != nil {
-		fmt.Printf("Error during writing of response headers: %v\n", err)
+
+	buf := bytes.NewBuffer([]byte{})
+	hErr := s.handler(buf, req)
+	if hErr != nil {
+		hErr.Write(conn)
+		return
 	}
-	fmt.Fprintf(conn, "\r\n")
-	fmt.Fprintf(conn, "Hello World!\n")
+
+	b := buf.Bytes()
+	headers := response.GetDefaultHeaders(len(b))
+
+	response.WriteStatusLine(conn, response.StatusOK)
+	response.WriteHeaders(conn, headers)
+	conn.Write(b)
 }

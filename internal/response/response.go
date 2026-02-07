@@ -65,5 +65,6 @@ func WriteHeaders(w io.Writer, headers headers.Headers) error {
 			return err
 		}
 	}
+	fmt.Fprint(w, "\r\n")
 	return nil
 }
