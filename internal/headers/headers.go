@@ -23,6 +23,10 @@ func (h Headers) Get(key string) (string, bool) {
 	return value, exists
 }
 
+func (h Headers) Set(key, value string) {
+	h[strings.ToLower(key)] = value
+}
+
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	dataString := string(data)
 	done = false
