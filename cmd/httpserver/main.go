@@ -63,6 +63,31 @@ func main() {
 			return
 		}
 
+		if req.RequestLine.RequestTarget == "/video" {
+			data, err := os.ReadFile("assets/vim.mp4")
+			if err != nil {
+				log.Printf("could not read video file: %v", err)
+
+				body := []byte("Internal Server Error: could not read video\n")
+				h := response.GetDefaultHeaders((len(body)))
+
+				w.WriteStatusLine(response.StatusInternalServerError)
+				w.WriteHeaders(h)
+				w.WriteBody(body)
+
+				return
+			}
+
+			h := response.GetDefaultHeaders(len(data))
+			h.Set("content-type", "video/mp4")
+
+			w.WriteStatusLine(response.StatusOK)
+			w.WriteHeaders(h)
+			w.WriteBody(data)
+
+			return
+		}
+
 		switch req.RequestLine.RequestTarget {
 		case "/yourproblem":
 			status = response.StatusBadRequest
