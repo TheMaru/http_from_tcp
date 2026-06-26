@@ -1,13 +1,17 @@
 package main
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
+	"github.com/TheMaru/http_from_tcp/internal/headers"
 	"github.com/TheMaru/http_from_tcp/internal/request"
 	"github.com/TheMaru/http_from_tcp/internal/response"
 	"github.com/TheMaru/http_from_tcp/internal/server"
@@ -32,14 +36,17 @@ func main() {
 			h.Delete("content-length")
 			h.Set("transfer-encoding", "chunked")
 			h.Set("content-type", resp.Header.Get("Content-Type"))
+			h.Set("Trailer", "X-Content-SHA256, X-Content-Length")
 
 			w.WriteStatusLine(response.StatusOK)
 			w.WriteHeaders(h)
 
+			var fullBody []byte
 			buf := make([]byte, 1024)
 			for {
 				n, err := resp.Body.Read(buf)
 				if n > 0 {
+					fullBody = append(fullBody, buf[:n]...)
 					w.WriteChunkedBody(buf[:n])
 				}
 				if err != nil {
@@ -47,6 +54,11 @@ func main() {
 				}
 			}
 			w.WriteChunkedBodyDone()
+			hash := sha256.Sum256(fullBody)
+			trailers := headers.NewHeaders()
+			trailers.Set("X-Content-SHA256", fmt.Sprintf("%x", hash))
+			trailers.Set("X-Content-Length", strconv.Itoa(len(fullBody)))
+			w.WriteTrailers(trailers)
 
 			return
 		}

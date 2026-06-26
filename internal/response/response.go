@@ -152,5 +152,17 @@ func (w *Writer) WriteChunkedBodyDone() (int, error) {
 	if w.state != writerStateBody {
 		return 0, fmt.Errorf("cannot write body in state %s", w.state)
 	}
-	return w.dest.Write([]byte("0\r\n\r\n"))
+	return w.dest.Write([]byte("0\r\n"))
+}
+
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	for key, value := range h {
+		_, err := fmt.Fprintf(w.dest, "%s: %s\r\n", key, value)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err := fmt.Fprint(w.dest, "\r\n")
+	return err
 }
