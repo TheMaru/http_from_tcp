@@ -2,8 +2,10 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/TheMaru/http_from_tcp/internal/request"
@@ -17,6 +19,37 @@ func main() {
 	handler := func(w *response.Writer, req *request.Request) {
 		var status response.StatusCode
 		var body string
+
+		if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/") {
+			destPath := strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin/")
+			resp, err := http.Get("https://httpbin.org/" + destPath)
+			if err != nil {
+				log.Fatalf("Error proxying: %v", err)
+			}
+			defer resp.Body.Close()
+
+			h := response.GetDefaultHeaders(0)
+			h.Delete("content-length")
+			h.Set("transfer-encoding", "chunked")
+			h.Set("content-type", resp.Header.Get("Content-Type"))
+
+			w.WriteStatusLine(response.StatusOK)
+			w.WriteHeaders(h)
+
+			buf := make([]byte, 1024)
+			for {
+				n, err := resp.Body.Read(buf)
+				if n > 0 {
+					w.WriteChunkedBody(buf[:n])
+				}
+				if err != nil {
+					break
+				}
+			}
+			w.WriteChunkedBodyDone()
+
+			return
+		}
 
 		switch req.RequestLine.RequestTarget {
 		case "/yourproblem":

@@ -119,3 +119,38 @@ func NewWriter(w io.Writer) *Writer {
 		dest: w,
 	}
 }
+
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	if w.state != writerStateBody {
+		return 0, fmt.Errorf("cannot write body in state %s", w.state)
+	}
+
+	total := 0
+
+	n, err := fmt.Fprintf(w.dest, "%x\r\n", len(p))
+	if err != nil {
+		return total, err
+	}
+	total += n
+
+	n, err = w.dest.Write(p)
+	if err != nil {
+		return total, err
+	}
+	total += n
+
+	n, err = w.dest.Write([]byte("\r\n"))
+	if err != nil {
+		return total, err
+	}
+	total += n
+
+	return total, nil
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	if w.state != writerStateBody {
+		return 0, fmt.Errorf("cannot write body in state %s", w.state)
+	}
+	return w.dest.Write([]byte("0\r\n\r\n"))
+}
